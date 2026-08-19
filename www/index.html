@@ -771,110 +771,132 @@
 
 })();
 </script>
-  <!-- CAPACITOR ADMOB BRIDGE (PASTE DIRECTLY BELOW YOUR SCRIPT) -->
-<script type="module">
-  import { AdMob, BannerAdSize, BannerAdPosition, RewardAdPluginEvents } from '@capacitor-community/admob';
+          <!-- =====================================================================
+         TEST DASHBOARD INTERFACE 
+         ===================================================================== -->
+    <div id="admob-test-panel" style="position: fixed; top: 10px; right: 10px; z-index: 999999; background: rgba(0,0,0,0.85); color: #fff; padding: 12px; border-radius: 8px; font-family: sans-serif; font-size: 12px; max-width: 200px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+      <strong style="display: block; margin-bottom: 8px; text-align: center; color: #4CAF50;">⚡ AdMob Tester</strong>
+      <button onclick="if(window.AndroidAds) window.AndroidAds.loadBanner()" style="width: 100%; margin-bottom: 6px; padding: 6px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Show Test Banner</button>
+      <button onclick="if(window.AndroidAds) window.AndroidAds.showInterstitial()" style="width: 100%; margin-bottom: 6px; padding: 6px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer;">Show Test Interstitial</button>
+      <button onclick="if(window.AndroidAds) window.AndroidAds.showRewarded()" style="width: 100%; padding: 6px; background: #E91E63; color: white; border: none; border-radius: 4px; cursor: pointer;">Show Test Rewarded</button>
+      <div id="test-callback-log" style="margin-top: 8px; font-size: 10px; color: #aaa; text-align: center; max-height: 30px; overflow: hidden;">Logs appear here...</div>
+    </div>
 
-  // State tracker to ensure initialization runs only once
-  let isAdMobInitialized = false;
+    <!-- 1. Mandatory Capacitor core engine link -->
+    <script src="capacitor.js"></script>
 
-  async function ensureInitialized() {
-    if (isAdMobInitialized) return;
-    try {
-      await AdMob.initialize({ requestTrackingAuthorization: true });
-      isAdMobInitialized = true;
-      console.log('[AdMob Bridge] Native AdMob SDK Initialized.');
-    } catch (err) {
-      console.error('[AdMob Bridge] Initialization failed:', err);
-    }
-  }
+    <!-- 2. AUTOMATIC ADMOB FALLBACK BYPASS SCRIPT -->
+    <script>
+      (function() {
+        'use strict';
 
-  // Backup existing placeholder references
-  const originalInitBanner = window.AdManager ? window.AdManager.initBannerAd : null;
-  const originalPreloadInterstitial = window.AdManager ? window.AdManager.preloadInterstitial : null;
+        // Helper to update the visual log box on your phone screen
+        function logToScreen(msg) {
+          const logBox = document.getElementById('test-callback-log');
+          if (logBox) logBox.innerText = msg;
+          console.log(msg);
+        }
 
-  if (window.AdManager) {
+        // Set up global game callbacks to see if code routes successfully
+        window.onInterstitialClosed = function() { logToScreen('Callback: Interstitial Closed!'); };
+        window.onRewardedEarned = function() { logToScreen('Callback: Reward Earned! 🏆'); };
+        window.onRewardedFailed = function() { logToScreen('Callback: Reward Failed ❌'); };
 
-    // 1. Wire up initBannerAd()
-    window.AdManager.initBannerAd = async function() {
-      if (typeof originalInitBanner === 'function') originalInitBanner.apply(this, arguments);
-      await ensureInitialized();
-      try {
-        await AdMob.showBanner({
-          adId: 'ca-app-pub-3940256099942544/6300978111', // Test Banner ID
-          adSize: BannerAdSize.BANNER,
-          position: BannerAdPosition.BOTTOM_CENTER,
-          margin: 0,
-          isTesting: true
-        });
-        console.log('[AdMob Bridge] Banner Ad displayed successfully.');
-      } catch (err) {
-        console.error('[AdMob Bridge] Banner Ad error:', err);
-      }
-    };
+        window.addEventListener('DOMContentLoaded', async () => {
+          
+          // 🛑 CHECK: If native Java code already injected window.AndroidAds, STOP here.
+          if (window.AndroidAds) {
+            logToScreen('Native Java code detected. Standing down.');
+            return;
+          }
 
-    // 2. Wire up preloadInterstitial()
-    window.AdManager.preloadInterstitial = async function() {
-      if (typeof originalPreloadInterstitial === 'function') originalPreloadInterstitial.apply(this, arguments);
-      await ensureInitialized();
-      try {
-        await AdMob.prepareInterstitial({
-          adId: 'ca-app-pub-3940256099942544/1033173712', // Test Interstitial ID
-          isTesting: true
-        });
-        console.log('[AdMob Bridge] Interstitial preloaded successfully.');
-      } catch (err) {
-        console.error('[AdMob Bridge] Interstitial preload error:', err);
-      }
-    };
+          // 🚨 FALLBACK: If no Java code exists, check if Capacitor AdMob is available
+          if (!window.Capacitor?.Plugins?.AdMob) {
+            logToScreen('Error: Capacitor AdMob Plugin not found.');
+            return;
+          }
 
-    // 3. Attach showInterstitial()
-    window.AdManager.showInterstitial = async function() {
-      try {
-        await AdMob.showInterstitial();
-        console.log('[AdMob Bridge] Interstitial shown successfully.');
-      } catch (err) {
-        console.error('[AdMob Bridge] Interstitial show error:', err);
-      }
-    };
+          logToScreen('Java missing. Activating AdMob Bypass...');
 
-    // 4. Attach preloadRewarded()
-    window.AdManager.preloadRewarded = async function() {
-      await ensureInitialized();
-      try {
-        AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => {
-          console.log('[AdMob Bridge] Reward earned:', reward);
-          if (typeof window.onUserEarnedReward === 'function') {
-            window.onUserEarnedReward(reward);
+          const { AdMob, BannerAdSize, BannerAdPosition, InterstitialAdPluginEvents, RewardedAdPluginEvents } = window.Capacitor.Plugins;
+
+          // Official Google AdMob Test Unit IDs
+          const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
+          const TEST_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712';
+          const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';
+
+          try {
+            // Initialize the Capacitor AdMob SDK
+            await AdMob.initialize({ initializeForTesting: true });
+
+            // Dynamically build the exact object structure your game expects
+            window.AndroidAds = {
+              
+              async loadBanner() {
+                try {
+                  logToScreen('Loading banner...');
+                  await AdMob.showBanner({
+                    adId: TEST_BANNER_ID,
+                    adSize: BannerAdSize.BANNER,
+                    position: BannerAdPosition.BOTTOM_CENTER,
+                    margin: 0,
+                    isTesting: true
+                  });
+                } catch (e) { logToScreen('Banner error: ' + e.message); }
+              },
+
+              async loadInterstitial() {
+                try {
+                  await AdMob.preloadInterstitial({ adId: TEST_INTERSTITIAL_ID, isTesting: true });
+                } catch (e) { console.error('[Bypass] Interstitial preload failed:', e); }
+              },
+
+              async showInterstitial() {
+                try {
+                  logToScreen('Showing interstitial...');
+                  await AdMob.removeAllListeners();
+                  AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
+                    if (typeof window.onInterstitialClosed === 'function') window.onInterstitialClosed();
+                    this.loadInterstitial(); // Preload next
+                  });
+                  await AdMob.showInterstitial();
+                } catch (e) {
+                  logToScreen('Interstitial failed.');
+                  if (typeof window.onInterstitialClosed === 'function') window.onInterstitialClosed();
+                }
+              },
+
+              async showRewarded() {
+                try {
+                  logToScreen('Preparing rewarded ad...');
+                  await AdMob.removeAllListeners();
+                  await AdMob.prepareRewardVideoAd({ adId: TEST_REWARDED_ID, isTesting: true });
+
+                  let earned = false;
+                  AdMob.addListener(RewardedAdPluginEvents.Rewarded, () => { earned = true; });
+                  AdMob.addListener(RewardedAdPluginEvents.Dismissed, () => {
+                    if (earned && typeof window.onRewardedEarned === 'function') window.onRewardedEarned();
+                    else if (!earned && typeof window.onRewardedFailed === 'function') window.onRewardedFailed();
+                  });
+
+                  await AdMob.showRewardVideoAd();
+                } catch (e) {
+                  logToScreen('Rewarded build crash.');
+                  if (typeof window.onRewardedFailed === 'function') window.onRewardedFailed();
+                }
+              }
+            };
+
+            // Preload the test ad assets right away
+            window.AndroidAds.loadInterstitial();
+
+          } catch (error) {
+            logToScreen('Bypass Setup Error.');
           }
         });
+      })();
+    </script>
 
-        await AdMob.prepareRewardVideoAd({
-          adId: 'ca-app-pub-3940256099942544/5224354917', // Test Rewarded ID
-          isTesting: true
-        });
-        console.log('[AdMob Bridge] Rewarded video preloaded successfully.');
-      } catch (err) {
-        console.error('[AdMob Bridge] Rewarded video preload error:', err);
-      }
-    };
 
-    // 5. Attach showRewarded()
-    window.AdManager.showRewarded = async function() {
-      try {
-        await AdMob.showRewardVideoAd();
-        console.log('[AdMob Bridge] Rewarded video shown successfully.');
-      } catch (err) {
-        console.error('[AdMob Bridge] Rewarded video show error:', err);
-      }
-    };
-
-  } else {
-    console.error('[AdMob Bridge] AdManager object not found. Ensure your original script is placed above this script.');
-  }
-
-  // Initialize automatically on load
-  document.addEventListener('DOMContentLoaded', ensureInitialized);
-</script>
 </body>
   </html>
