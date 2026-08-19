@@ -2,7 +2,7 @@
   "name": "com.mycompany.myapp",
   "version": "1.0.0",
   "description": "My Web App",
-  "main": "index.html",
+  "main": "index.js",
   "scripts": {
     "build": "echo 'No web build needed'"
   },
