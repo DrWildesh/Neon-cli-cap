@@ -30,24 +30,25 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android
 
+      # 🚀 GENERATE RESOURCES: Must run right before syncing assets
       - name: Generate Icons & Splash
         run: npx @capacitor/assets generate --android
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      # 🚀 NEW STEP: This injects the required AdMob meta-data dynamically on GitHub's build server
       - name: Inject AdMob App ID into AndroidManifest
         run: |
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           ADMOB_META='<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>'
           sed -i "s|<application|<application>\n        ${ADMOB_META}|" $MANIFEST_PATH
 
+      # 🏗️ REBUILD GRADLE: Compile fresh layouts cleanly
       - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug 
+          ./gradlew clean assembleDebug 
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
