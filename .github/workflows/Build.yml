@@ -33,7 +33,94 @@ jobs:
       - name: Generate App Icons & Splash Screen
         run: npx @capacitor/assets generate --android
 
-      # STEP 1: ADVANCED AUTOMATED Android PATCHER (Handles Manifest, MainActivity, and Gradle)
+      # STEP 1: FIXED AUTOMATED ANDROID PATCHER
+      - name: Create and Run Android Infrastructure Injector Script
+        run: |
+          cat << 'EOF' > patch-android.js
+          const fs = require('fs');
+          const path = require('path');
+
+          // 1. INJECT ADMOB APP ID INTO MANIFEST
+          const manifestFile = 'android/app/src/main/AndroidManifest.xml';
+          if (fs.existsSync(manifestFile)) {
+            let content = fs.readFileSync(manifestFile, 'utf8');
+            const tag = '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>';
+            if (!content.includes('APPLICATION_ID')) {
+              content = content.replace('</application>', `    ${tag}\n</application>`);
+              fs.writeFileSync(manifestFile, content, 'utf8');
+              console.log('AdMob App ID successfully injected into Manifest.');
+            }
+          }
+
+          // 2. FIXED: FORCE REGISTER ADMOB IN MAINACTIVITY.JAVA (CORRECT JAVA SYNTAX ORDER)
+          function findMainActivity(dir) {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+              const fullPath = path.join(dir, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                const found = findMainActivity(fullPath);
+                if (found) return found;
+              } else if (file === 'MainActivity.java') {
+                return fullPath;
+              }
+            }
+            return null;
+          }
+
+          const mainActivityPath = findMainActivity('android/app/src/main/java');
+          if (mainActivityPath) {
+            let activityContent = fs.readFileSync(mainActivityPath, 'utf8');
+            
+            // Fixed: Inject the import AFTER the package declaration line (with newline matching)
+            if (!activityContent.includes('com.capacitorjs.plugins.admob.AdMobPlugin')) {
+              activityContent = activityContent.replace(
+                /(package\s+[\w\.]+;\s*)/,
+                '$1\nimport com.capacitorjs.plugins.admob.AdMobPlugin;\n'
+              );
+            }
+
+            // Explicitly register plugin inside the onCreate activity lifecycle
+            if (!activityContent.includes('registerPlugin(AdMobPlugin.class)')) {
+              const hook = `    @Override\n    public void onCreate(android.os.Bundle savedInstanceState) {\n        registerPlugin(AdMobPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n`;
+              activityContent = activityContent.replace(
+                'public class MainActivity extends BridgeActivity {',
+                `public class MainActivity extends BridgeActivity {\n${hook}`
+              );
+              fs.writeFileSync(mainActivityPath, activityContent, 'utf8');
+              console.log('MainActivity.java successfully patched with valid syntax order.');
+            }
+          }
+
+          // 3. DISABLE GRADLE DEBUG MINIFICATION
+          const gradleFile = 'android/app/build.gradle';
+          if (fs.existsSync(gradleFile)) {
+            let gradleContent = fs.readFileSync(gradleFile, 'utf8');
+            if (gradleContent.includes('debug {') && !gradleContent.includes('minifyEnabled false')) {
+              gradleContent = gradleContent.replace(
+                'debug {',
+                'debug {\n            minifyEnabled false\n            shrinkResources false'
+              );
+              fs.writeFileSync(gradleFile, gradleContent, 'utf8');
+              console.log('Gradle minification stripped out of debug config.');
+            }
+          }
+          EOF
+          node patch-android.js
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
       - name: Create and Run Android Infrastructure Injector Script
         run: |
           cat << 'EOF' > patch-android.js
