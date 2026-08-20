@@ -33,8 +33,22 @@ jobs:
       - name: Generate App Icons & Splash Screen
         run: npx @capacitor/assets generate --android
 
-      - name: Inject AdMob App ID into Manifest
-        run: node -e "const fs=require('fs'); const p='android/app/src/main/AndroidManifest.xml'; let c=fs.readFileSync(p,'utf8'); const meta='<meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"ca-app-pub-3940256099942544~3347511713\"/>'; if(!c.includes('com.google.android.gms.ads.APPLICATION_ID')){ c=c.replace('</application>', '    ' + meta + '\n</application>'); fs.writeFileSync(p,c,'utf8'); console.log('AdMob ID injected'); }"
+      - name: Create AdMob Injector Script
+        run: |
+          cat << 'EOF' > inject.js
+          const fs = require('fs');
+          const file = 'android/app/src/main/AndroidManifest.xml';
+          let content = fs.readFileSync(file, 'utf8');
+          const tag = '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>';
+          if (!content.includes('APPLICATION_ID')) {
+            content = content.replace('</application>', `    ${tag}\n</application>`);
+            fs.writeFileSync(file, content, 'utf8');
+            console.log('AdMob App ID successfully injected.');
+          }
+          EOF
+
+      - name: Run AdMob Injector Script
+        run: node inject.js
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -49,49 +63,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: my-app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk        run: |
-          node -e '
-            const fs = require("fs");
-            const path = "android/app/src/main/AndroidManifest.xml";
-            let content = fs.readFileSync(path, "utf8");
-            const metaData = `<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>`;
-            if (!content.includes("com.google.android.gms.ads.APPLICATION_ID")) {
-              content = content.replace("</application>", `    ${metaData}\n    </application>`);
-              fs.writeFileSync(path, content, "utf8");
-              console.log("Successfully injected AdMob App ID into AndroidManifest.xml");
-            }
-          '
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Build Debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: my-app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk        run: npx cap sync android
-
-      - name: Inject AdMob App ID into AndroidManifest
-        run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          ADMOB_META='<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>'
-          sed -i "s|<application|<application>\n        ${ADMOB_META}|" $MANIFEST_PATH
-
-      # 🏗️ REBUILD GRADLE: Compile fresh layouts cleanly
-      - name: Build APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew clean assembleDebug 
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
