@@ -30,9 +30,11 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android
 
-      # 🚀 GENERATE RESOURCES: Must run right before syncing assets
-      - name: Generate Icons & Splash
-        run: npx @capacitor/assets generate --android
+      - name: Generate Assets
+  run: |
+    npm install @capacitor/assets@3.0.5 --save-dev
+    npx capacitor-assets generate --android
+    npx cap sync android
 
       - name: Sync Capacitor
         run: npx cap sync android
