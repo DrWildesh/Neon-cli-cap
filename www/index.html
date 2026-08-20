@@ -359,144 +359,102 @@
   <div id="ad-banner-container-bottom" style="display:none;"></div>
 
 </div>
+<!-- CAPACITOR 6 ADMOB SCRIPT -->
+<script type="module">
+  import { AdMob, BannerAdSize, BannerAdPosition, RewardAdPluginEvents } from '@capacitor-community/admob';
 
-<script>
-(function(){
-  'use strict';
+  // Standalone AdManager Object
+  window.AdManager = {
+    initialized: false,
 
-  // Global logger helper since you don't have a PC console
-  function mobileLog(msg, isError = false) {
-    console.log(msg);
-    const logBox = document.getElementById('phone-debug-log');
-    if (logBox) {
-      logBox.innerHTML += `<div style="color: ${isError ? '#ff4d4d' : '#00ffcc'}; margin-bottom:4px;">➔ ${msg}</div>`;
-      logBox.scrollTop = logBox.scrollHeight;
-    }
-  }
-
-  const AdManager = {
-    TEST_BANNER_ID: 'ca-app-pub-3940256099942544/6300978111',
-    TEST_INTERSTITIAL_ID: 'ca-app-pub-3940256099942544/1033173712',
-    TEST_REWARDED_ID: 'ca-app-pub-3940256099942544/5224354917',
-
-    getPlugin() {
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob) {
-        return window.Capacitor.Plugins.AdMob;
+    // Initialize SDK
+    async init() {
+      if (this.initialized) return;
+      try {
+        await AdMob.initialize({ requestTrackingAuthorization: true });
+        this.initialized = true;
+        console.log('[AdMob] SDK initialized.');
+      } catch (err) {
+        console.error('[AdMob] Initialization failed:', err);
       }
-      mobileLog('AdMob plugin missing (running in normal web browser setup).', true);
-      return null;
     },
 
-    async initBannerAd(){
-      const AdMob = this.getPlugin();
-      if (!AdMob) return;
-
+    // 1. BANNER AD
+    async initBannerAd() {
+      await this.init();
       try {
-        mobileLog('Initializing AdMob SDK...');
-        await AdMob.initialize({
-          testingDevices: [],
-          initializeForTesting: true
-        });
-
-        mobileLog('Requesting Banner...');
         await AdMob.showBanner({
-          adId: this.TEST_BANNER_ID,
-          adSize: 'BANNER',
-          position: 'BOTTOM_CENTER',
+          adId: 'ca-app-pub-3940256099942544/6300978111', // Test Banner ID
+          adSize: BannerAdSize.BANNER,
+          position: BannerAdPosition.BOTTOM_CENTER,
           margin: 0,
           isTesting: true
         });
-        mobileLog('Banner successfully rendered.');
-      } catch (error) {
-        mobileLog('Banner failed: ' + error.message, true);
+        console.log('[AdMob] Banner displayed.');
+      } catch (err) {
+        console.error('[AdMob] Banner failed:', err);
       }
     },
 
-    async preloadInterstitial(){
-      const AdMob = this.getPlugin();
-      if (!AdMob) return;
-
+    // 2. INTERSTITIAL AD
+    async preloadInterstitial() {
+      await this.init();
       try {
-        mobileLog('Caching Interstitial...');
         await AdMob.prepareInterstitial({
-          adId: this.TEST_INTERSTITIAL_ID,
+          adId: 'ca-app-pub-3940256099942544/1033173712', // Test Interstitial ID
           isTesting: true
         });
-        mobileLog('Interstitial cached and ready.');
-      } catch (error) {
-        mobileLog('Interstitial caching failed: ' + error.message, true);
+        console.log('[AdMob] Interstitial preloaded.');
+      } catch (err) {
+        console.error('[AdMob] Interstitial preload failed:', err);
       }
     },
 
-    async showInterstitial(onClosed){
-      const AdMob = this.getPlugin();
-      if (!AdMob) {
-        if (typeof onClosed === 'function') onClosed();
-        return;
-      }
-
+    async showInterstitial() {
       try {
-        mobileLog('Launching Interstitial Video...');
         await AdMob.showInterstitial();
-        
-        AdMob.addListener('interstitialAdDismissed', () => {
-          mobileLog('Interstitial closed by user.');
-          AdMob.removeAllListeners(); 
-          if (typeof onClosed === 'function') onClosed();
-          this.preloadInterstitial(); 
-        });
-      } catch (error) {
-        mobileLog('Interstitial display crashed: ' + error.message, true);
-        if (typeof onClosed === 'function') onClosed(); 
+        console.log('[AdMob] Interstitial shown.');
+      } catch (err) {
+        console.error('[AdMob] Interstitial show failed:', err);
       }
     },
 
-    async showRewardedAd(onReward, onFail){
-      const AdMob = this.getPlugin();
-      if (!AdMob) {
-        if (typeof onFail === 'function') onFail();
-        return;
-      }
-
+    // 3. REWARDED AD
+    async preloadRewarded() {
+      await this.init();
       try {
-        mobileLog('Preparing Rewarded Video...');
+        AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward) => {
+          console.log('[AdMob] Reward earned:', reward);
+          if (typeof window.onUserEarnedReward === 'function') {
+            window.onUserEarnedReward(reward);
+          }
+        });
+
         await AdMob.prepareRewardVideoAd({
-          adId: this.TEST_REWARDED_ID,
+          adId: 'ca-app-pub-3940256099942544/5224354917', // Test Rewarded ID
           isTesting: true
         });
+        console.log('[AdMob] Rewarded preloaded.');
+      } catch (err) {
+        console.error('[AdMob] Rewarded preload failed:', err);
+      }
+    },
 
+    async showRewarded() {
+      try {
         await AdMob.showRewardVideoAd();
-        mobileLog('Rewarded Video rendering active.');
-
-        AdMob.addListener('onRewardedVideoAdReward', (reward) => {
-          mobileLog('Success! Reward verified by Google AdMob.');
-          AdMob.removeAllListeners();
-          if (typeof onReward === 'function') onReward();
-        });
-
-        AdMob.addListener('rewardVideoAdDismissed', () => {
-          mobileLog('User backed out of Rewarded ad early.', true);
-          AdMob.removeAllListeners();
-          if (typeof onFail === 'function') onFail();
-        });
-      } catch (error) {
-        mobileLog('Rewarded Ad error: ' + error.message, true);
-        if (typeof onFail === 'function') onFail();
+        console.log('[AdMob] Rewarded shown.');
+      } catch (err) {
+        console.error('[AdMob] Rewarded show failed:', err);
       }
     }
   };
 
-  // Safe standard DOM initializer for pure web views
-  window.addEventListener('DOMContentLoaded', () => {
-    // Wait a brief half-second to let Capacitor finish establishing its native sidecar link
-    setTimeout(() => {
-      AdManager.initBannerAd();
-      AdManager.preloadInterstitial();
-    }, 500);
+  // Automatically initialize and show banner when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+    window.AdManager.initBannerAd();
   });
-
-  window.GameAdManager = AdManager;
-})();
+        
 
 
   /* =====================================================================
