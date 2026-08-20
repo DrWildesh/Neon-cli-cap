@@ -374,18 +374,16 @@
 </div>
 
 
-<!-- THE CORRECTED LIFE-CYCLE ADMOB BRIDGE -->
+
+        <!-- THE LIFE-CYCLE ADMOB FULLSCREEN BRIDGE -->
 <script>
   (function() {
     const AdManager = {
       initialized: false,
       plugin: null,
 
-      // This is the only reliable way to catch a Capacitor plugin on a raw HTML setup
       getPlugin() {
         if (this.plugin) return this.plugin;
-        
-        // Capacitor strictly registers core variables after native container handshake
         if (window.Capacitor && window.Capacitor.Plugins) {
           this.plugin = window.Capacitor.Plugins.AdMob;
         }
@@ -394,19 +392,11 @@
 
       async init() {
         if (this.initialized) return true;
-        
         const AdMob = this.getPlugin();
-        if (!AdMob) {
-          // If this triggers, your JS code is running too fast for the Android Shell!
-          alert('[AdManager ALERT] Native AdMob plugin not detected yet. Retrying...');
-          return false;
-        }
-
+        if (!AdMob) return false;
         try {
-          // Explicit empty object required for stable initialization handshake
           await AdMob.initialize({});
           this.initialized = true;
-          alert('[AdManager SUCCESS] AdMob Engine Initialized!');
           return true;
         } catch (err) {
           alert('[AdManager ERROR] Init Crash: ' + JSON.stringify(err));
@@ -414,36 +404,40 @@
         }
       },
 
-      async showMyBanner() {
+      // CODE TO FORCE A FULLSCREEN INTERSTITIAL AD
+      async showMyFullscreenAd() {
         const ready = await this.init();
         if (!ready) return;
 
         try {
-          await this.getPlugin().showBanner({
-            adId: 'ca-app-pub-3940256099942544/6300978111', // Public Android Test ID
-            adSize: 'BANNER',
-            position: 'BOTTOM_CENTER',
-            margin: 0,
-            isTesting: true // This bypasses all device profile errors on Google's server
+          const AdMob = this.getPlugin();
+
+          // Step 1: Tell Google to download the fullscreen video asset
+          await AdMob.prepareInterstitial({
+            adId: 'ca-app-pub-3940256099942544/1033173712', // Universal Android Interstitial Test ID
+            isTesting: true
           });
+
+          // Step 2: Display the fullscreen layout over the screen canvas
+          await AdMob.showInterstitial();
+
         } catch (err) {
-          alert('[AdManager BANNER ERROR] Display Failed: ' + JSON.stringify(err));
+          alert('[AdManager FULLSCREEN ERROR]: ' + JSON.stringify(err));
         }
       }
     };
 
     window.AdManager = AdManager;
 
-    // THE MAGIC LIFECYCLE LINK
-    // Do NOT use DOMContentLoaded or deviceready. 
-    // Wait for the window to completely load, then give Android 1.5 seconds to link the plugins.
+    // Trigger the fullscreen ad 1.5 seconds after loading the app
     window.addEventListener('load', () => {
       setTimeout(() => {
-        AdManager.showMyBanner();
+        AdManager.showMyFullscreenAd();
       }, 1500); 
     });
   })();
 </script>
+
 
 
 
