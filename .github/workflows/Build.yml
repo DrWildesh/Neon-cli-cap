@@ -31,10 +31,9 @@ jobs:
         run: npx cap add android
 
       - name: Generate Assets
-  run: |
-    npm install @capacitor/assets@3.0.5 --save-dev
-    npx capacitor-assets generate --android
-    npx cap sync android
+        run: npm install @capacitor/assets@3.0.5 --save-dev
+              npx capacitor-assets generate --android
+              npx cap sync android
 
       - name: Sync Capacitor
         run: npx cap sync android
