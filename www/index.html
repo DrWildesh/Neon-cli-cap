@@ -364,67 +364,139 @@
 (function(){
   'use strict';
 
-  /* =====================================================================
-     ADMOB INTEGRATION LAYER (PLACEHOLDER)
-     ---------------------------------------------------------------------
-     Drop your real AdMob logic into these functions. They are already
-     wired into the correct game events below, so once you fill them in
-     (typically by calling out to a native Android bridge injected into
-     the WebView, e.g. `window.AndroidAds`), ads will trigger automatically
-     at the right moments without touching any other game code.
-  ===================================================================== */
+  // Global logger helper since you don't have a PC console
+  function mobileLog(msg, isError = false) {
+    console.log(msg);
+    const logBox = document.getElementById('phone-debug-log');
+    if (logBox) {
+      logBox.innerHTML += `<div style="color: ${isError ? '#ff4d4d' : '#00ffcc'}; margin-bottom:4px;">➔ ${msg}</div>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+  }
+
   const AdManager = {
-    // Call once when the app/page loads.
-    initBannerAd(){
-      // TODO: Paste AdMob Banner init code here.
-      // Example (Android WebView JS bridge):
-      // if (window.AndroidAds) window.AndroidAds.loadBanner("ca-app-pub-3940256099942544/6300978111");
-      console.log('[AdManager] initBannerAd() placeholder — wire up AdMob banner here.');
+    TEST_BANNER_ID: 'ca-app-pub-3940256099942544/6300978111',
+    TEST_INTERSTITIAL_ID: 'ca-app-pub-3940256099942544/1033173712',
+    TEST_REWARDED_ID: 'ca-app-pub-3940256099942544/5224354917',
+
+    getPlugin() {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob) {
+        return window.Capacitor.Plugins.AdMob;
+      }
+      mobileLog('AdMob plugin missing (running in normal web browser setup).', true);
+      return null;
     },
 
-    // Call to preload an interstitial before you need to show it.
-    preloadInterstitial(){
-      // TODO: Paste AdMob Interstitial preload code here.
-      // Example:
-      // if (window.AndroidAds) window.AndroidAds.loadInterstitial("ca-app-pub-3940256099942544/1033173712");
-      console.log('[AdManager] preloadInterstitial() placeholder.');
+    async initBannerAd(){
+      const AdMob = this.getPlugin();
+      if (!AdMob) return;
+
+      try {
+        mobileLog('Initializing AdMob SDK...');
+        await AdMob.initialize({
+          testingDevices: [],
+          initializeForTesting: true
+        });
+
+        mobileLog('Requesting Banner...');
+        await AdMob.showBanner({
+          adId: this.TEST_BANNER_ID,
+          adSize: 'BANNER',
+          position: 'BOTTOM_CENTER',
+          margin: 0,
+          isTesting: true
+        });
+        mobileLog('Banner successfully rendered.');
+      } catch (error) {
+        mobileLog('Banner failed: ' + error.message, true);
+      }
     },
 
-    // Called automatically on Game Over (every N game-overs, see GAME_OVER_AD_FREQUENCY).
-    showInterstitial(onClosed){
-      // TODO: Paste AdMob Interstitial show code here.
-      // Example:
-      // if (window.AndroidAds) {
-      //   window.AndroidAds.showInterstitial();
-      //   window.onInterstitialClosed = onClosed; // native calls this back
-      //   return;
-      // }
-      console.log('[AdManager] showInterstitial() placeholder — showing nothing, continuing immediately.');
-      if (typeof onClosed === 'function') onClosed();
+    async preloadInterstitial(){
+      const AdMob = this.getPlugin();
+      if (!AdMob) return;
+
+      try {
+        mobileLog('Caching Interstitial...');
+        await AdMob.prepareInterstitial({
+          adId: this.TEST_INTERSTITIAL_ID,
+          isTesting: true
+        });
+        mobileLog('Interstitial cached and ready.');
+      } catch (error) {
+        mobileLog('Interstitial caching failed: ' + error.message, true);
+      }
     },
 
-    // Called when player taps "Watch Ad to Continue" on Game Over.
-    showRewardedAd(onReward, onFail){
-      // TODO: Paste AdMob Rewarded Ad code here.
-      // Example:
-      // if (window.AndroidAds) {
-      //   window.AndroidAds.showRewarded();
-      //   window.onRewardedEarned = onReward;
-      //   window.onRewardedFailed = onFail;
-      //   return;
-      // }
-      console.log('[AdManager] showRewardedAd() placeholder — no ad SDK connected, simulating success.');
-      if (typeof onReward === 'function') onReward(); // remove this line once real SDK is wired up
+    async showInterstitial(onClosed){
+      const AdMob = this.getPlugin();
+      if (!AdMob) {
+        if (typeof onClosed === 'function') onClosed();
+        return;
+      }
+
+      try {
+        mobileLog('Launching Interstitial Video...');
+        await AdMob.showInterstitial();
+        
+        AdMob.addListener('interstitialAdDismissed', () => {
+          mobileLog('Interstitial closed by user.');
+          AdMob.removeAllListeners(); 
+          if (typeof onClosed === 'function') onClosed();
+          this.preloadInterstitial(); 
+        });
+      } catch (error) {
+        mobileLog('Interstitial display crashed: ' + error.message, true);
+        if (typeof onClosed === 'function') onClosed(); 
+      }
+    },
+
+    async showRewardedAd(onReward, onFail){
+      const AdMob = this.getPlugin();
+      if (!AdMob) {
+        if (typeof onFail === 'function') onFail();
+        return;
+      }
+
+      try {
+        mobileLog('Preparing Rewarded Video...');
+        await AdMob.prepareRewardVideoAd({
+          adId: this.TEST_REWARDED_ID,
+          isTesting: true
+        });
+
+        await AdMob.showRewardVideoAd();
+        mobileLog('Rewarded Video rendering active.');
+
+        AdMob.addListener('onRewardedVideoAdReward', (reward) => {
+          mobileLog('Success! Reward verified by Google AdMob.');
+          AdMob.removeAllListeners();
+          if (typeof onReward === 'function') onReward();
+        });
+
+        AdMob.addListener('rewardVideoAdDismissed', () => {
+          mobileLog('User backed out of Rewarded ad early.', true);
+          AdMob.removeAllListeners();
+          if (typeof onFail === 'function') onFail();
+        });
+      } catch (error) {
+        mobileLog('Rewarded Ad error: ' + error.message, true);
+        if (typeof onFail === 'function') onFail();
+      }
     }
   };
 
-  // How many game-overs between forced interstitials (typical AdMob best practice: not every single one).
-  const GAME_OVER_AD_FREQUENCY = 3;
-  let gameOverCount = 0;
+  // Safe standard DOM initializer for pure web views
+  window.addEventListener('DOMContentLoaded', () => {
+    // Wait a brief half-second to let Capacitor finish establishing its native sidecar link
+    setTimeout(() => {
+      AdManager.initBannerAd();
+      AdManager.preloadInterstitial();
+    }, 500);
+  });
 
-  // Kick off banner + preload interstitial as soon as the game boots.
-  AdManager.initBannerAd();
-  AdManager.preloadInterstitial();
+  window.GameAdManager = AdManager;
+})();
 
 
   /* =====================================================================
@@ -896,7 +968,25 @@
         });
       })();
     </script>
-
+<!-- Temporary Phone Diagnostic Console -->
+<div id="phone-debug-log" style="
+  position: fixed; 
+  top: 10px; 
+  left: 10px; 
+  right: 10px; 
+  height: 120px; 
+  background: rgba(0, 0, 0, 0.85); 
+  border: 1px solid #00ffcc; 
+  border-radius: 6px; 
+  z-index: 999999; 
+  font-family: monospace; 
+  font-size: 11px; 
+  padding: 8px; 
+  overflow-y: auto; 
+  pointer-events: none;
+">
+  <strong>📱 System Debug Logs:</strong><br>
+</div>
 
 </body>
   </html>
