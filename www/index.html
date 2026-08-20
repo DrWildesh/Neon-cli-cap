@@ -373,36 +373,33 @@
 
 </div>
 
-<!-- CAPACITOR ADMOB BRIDGE -->
+
+        <!-- CAPACITOR ADMOB BRIDGE -->
 <script>
   (function() {
     const AdManager = {
       initialized: false,
-      plugin: null,
 
-      // Safe accessor for native AdMob plugin
+      // In Capacitor 6, access the plugin directly using this universal global accessor
       getPlugin() {
-        if (this.plugin) return this.plugin;
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob) {
-          this.plugin = window.Capacitor.Plugins.AdMob;
-        }
-        return this.plugin;
+        return window.Capacitor?.Plugins?.AdMob || null;
       },
 
       async init() {
         if (this.initialized) return true;
         const AdMob = this.getPlugin();
         if (!AdMob) {
-          console.warn('[AdManager] Native AdMob plugin not detected. Running in web fallback mode.');
+          console.warn('[AdManager] AdMob plugin not found on window object.');
           return false;
         }
         try {
-          await AdMob.initialize({ requestTrackingAuthorization: true });
+          // Initialize with empty parameters to ensure it passes cleanly on Android
+          await AdMob.initialize({});
           this.initialized = true;
-          console.log('[AdManager] Native AdMob initialized.');
+          console.log('[AdManager] Native AdMob Initialization Success.');
           return true;
         } catch (err) {
-          console.error('[AdManager] Init error:', err);
+          console.error('[AdManager] Initialization Failed:', err);
           return false;
         }
       },
@@ -412,113 +409,31 @@
         if (!ready) return;
         try {
           await this.getPlugin().showBanner({
-            adId: 'ca-app-pub-3940256099942544/6300978111',
+            adId: 'ca-app-pub-3940256099942544/6300978111', // Public Sandbox Banner Test ID
             adSize: 'BANNER',
             position: 'BOTTOM_CENTER',
             margin: 0,
-            isTesting: true
+            isTesting: true // Programmatically bypass dashboard device locks
           });
         } catch (err) {
-          console.error('[AdManager] Banner error:', err);
-        }
-      },
-
-      async preloadInterstitial() {
-        const ready = await this.init();
-        if (!ready) return;
-        try {
-          await this.getPlugin().prepareInterstitial({
-            adId: 'ca-app-pub-3940256099942544/1033173712',
-            isTesting: true
-          });
-        } catch (err) {
-          console.error('[AdManager] Interstitial prepare error:', err);
-        }
-      },
-
-      async showInterstitial(onClosed) {
-        const ready = await this.init();
-        const AdMob = this.getPlugin();
-        if (!ready || !AdMob) {
-          if (typeof onClosed === 'function') onClosed();
-          return;
-        }
-
-        try {
-          const dismissListener = await AdMob.addListener('interstitialAdDismissed', () => {
-            if (dismissListener && dismissListener.remove) dismissListener.remove();
-            if (typeof onClosed === 'function') onClosed();
-          });
-          await AdMob.showInterstitial();
-        } catch (err) {
-          console.error('[AdManager] Interstitial show error:', err);
-          if (typeof onClosed === 'function') onClosed();
-        }
-      },
-
-      async showRewardedAd(onReward, onFail) {
-        const ready = await this.init();
-        const AdMob = this.getPlugin();
-        if (!ready || !AdMob) {
-          console.warn('[AdManager] Native ads unavailable, granting reward fallback.');
-          if (typeof onReward === 'function') onReward();
-          return;
-        }
-
-        let rewardEarned = false;
-        let rewardListener = null;
-        let dismissListener = null;
-
-        const cleanup = () => {
-          if (rewardListener && rewardListener.remove) rewardListener.remove();
-          if (dismissListener && dismissListener.remove) dismissListener.remove();
-        };
-
-        try {
-          rewardListener = await AdMob.addListener('onRewardedVideoReward', (reward) => {
-            rewardEarned = true;
-            if (typeof onReward === 'function') onReward(reward);
-          });
-
-          dismissListener = await AdMob.addListener('onRewardedVideoAdDismissed', () => {
-            cleanup();
-            if (!rewardEarned && typeof onFail === 'function') onFail();
-          });
-
-          await AdMob.prepareRewardVideoAd({
-            adId: 'ca-app-pub-3940256099942544/5224354917',
-            isTesting: true
-          });
-          await AdMob.showRewardVideoAd();
-
-        } catch (err) {
-          console.error('[AdManager] Rewarded show error:', err);
-          cleanup();
-          // Fallback reward on failure so game doesn't get stuck
-          if (typeof onReward === 'function') onReward();
+          console.error('[AdManager] Banner display error:', err);
         }
       }
     };
 
     window.AdManager = AdManager;
 
-    // Boot after native bridge is guaranteed to be ready
-    document.addEventListener('deviceready', () => {
-      AdManager.initBannerAd();
-      AdManager.preloadInterstitial();
-    }, false);
-
-    // Fallback trigger if not running inside cordova/capacitor container
-    window.addEventListener('load', () => {
+    // Capacitor 6 native execution hook
+    window.addEventListener('DOMContentLoaded', () => {
+      // Delay execution by 800ms to give the device runtime container time to link the native window plugins
       setTimeout(() => {
-        if (!AdManager.initialized) {
-          AdManager.initBannerAd();
-          AdManager.preloadInterstitial();
-        }
-      }, 1000);
+        console.log("[AdManager] Triggering lazy initialization loop.");
+        AdManager.initBannerAd();
+      }, 800);
     });
   })();
 </script>
+
 
 <script>
 (function(){
