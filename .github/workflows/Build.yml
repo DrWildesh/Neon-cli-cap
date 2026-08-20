@@ -34,7 +34,22 @@ jobs:
         run: npx @capacitor/assets generate --android
 
       - name: Inject AdMob App ID into Manifest
+        run: node -e "const fs=require('fs'); const p='android/app/src/main/AndroidManifest.xml'; let c=fs.readFileSync(p,'utf8'); const meta='<meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"ca-app-pub-3940256099942544~3347511713\"/>'; if(!c.includes('com.google.android.gms.ads.APPLICATION_ID')){ c=c.replace('</application>', '    ' + meta + '\n</application>'); fs.writeFileSync(p,c,'utf8'); console.log('AdMob ID injected'); }"
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build Debug APK
         run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk        run: |
           node -e '
             const fs = require("fs");
             const path = "android/app/src/main/AndroidManifest.xml";
