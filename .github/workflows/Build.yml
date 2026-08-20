@@ -33,12 +33,38 @@ jobs:
       - name: Generate App Icons & Splash Screen
         run: npx @capacitor/assets generate --android
 
-      # STEP 1: FIXED AUTOMATED ANDROID PATCHER
-      - name: Create and Run Android Infrastructure Injector Script
+      # STEP 1: ONLY INJECT THE REQUIRED GOOGLE APPLICATION METADATA ID
+      - name: Create AdMob Injector Script
         run: |
-          cat << 'EOF' > patch-android.js
+          cat << 'EOF' > inject.js
           const fs = require('fs');
-          const path = require('path');
+          const file = 'android/app/src/main/AndroidManifest.xml';
+          if (fs.existsSync(file)) {
+            let content = fs.readFileSync(file, 'utf8');
+            const tag = '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>';
+            if (!content.includes('APPLICATION_ID')) {
+              content = content.replace('</application>', `    ${tag}\n</application>`);
+              fs.writeFileSync(file, content, 'utf8');
+              console.log('AdMob App ID successfully injected.');
+            }
+          }
+          EOF
+          node inject.js
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
           // 1. INJECT ADMOB APP ID INTO MANIFEST
           const manifestFile = 'android/app/src/main/AndroidManifest.xml';
