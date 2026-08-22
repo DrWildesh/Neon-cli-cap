@@ -395,9 +395,10 @@
         const AdMob = this.getPlugin();
         if (!AdMob) return false;
         try {
-          await AdMob.initialize({});
-          this.initialized = true;
-          return true;
+          await AdMob.initialize({ 
+      initializeForTesting: true,
+      testingDevices: ['6efb81b2c80e414991bab0d8b480f166'] 
+    });
         } catch (err) {
           alert('[AdManager ERROR] Init Crash: ' + JSON.stringify(err));
           return false;
