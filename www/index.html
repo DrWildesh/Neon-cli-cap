@@ -378,66 +378,136 @@
         <!-- THE LIFE-CYCLE ADMOB FULLSCREEN BRIDGE -->
 <script>
   (function() {
-    const AdManager = {
-      initialized: false,
-      plugin: null,
+  const AdManager = {
+  _admob(){ return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob) || null; },
 
-      getPlugin() {
-        if (this.plugin) return this.plugin;
-        if (window.Capacitor && window.Capacitor.Plugins) {
-          this.plugin = window.Capacitor.Plugins.AdMob;
-        }
-        return this.plugin;
-      },
+  async initBannerAd(){
+    const AdMob = this._admob();
+    if(!AdMob) return;
 
-      async init() {
-        if (this.initialized) return true;
-        const AdMob = this.getPlugin();
-        if (!AdMob) return false;
-        try {
-          await AdMob.initialize({ 
+    await AdMob.initialize({ 
       initializeForTesting: true,
       testingDevices: ['6efb81b2c80e414991bab0d8b480f166'] 
     });
-        } catch (err) {
-          alert('[AdManager ERROR] Init Crash: ' + JSON.stringify(err));
-          return false;
-        }
-      },
 
-      // CODE TO FORCE A FULLSCREEN INTERSTITIAL AD
-      async showMyFullscreenAd() {
-        const ready = await this.init();
-        if (!ready) return;
-
-        try {
-          const AdMob = this.getPlugin();
-
-          // Step 1: Tell Google to download the fullscreen video asset
-          await AdMob.prepareInterstitial({
-            adId: 'ca-app-pub-3940256099942544/1033173712', // Universal Android Interstitial Test ID
-            isTesting: true
-          });
-
-          // Step 2: Display the fullscreen layout over the screen canvas
-          await AdMob.showInterstitial();
-
-        } catch (err) {
-          alert('[AdManager FULLSCREEN ERROR]: ' + JSON.stringify(err));
-        }
-      }
-    };
-
-    window.AdManager = AdManager;
-
-    // Trigger the fullscreen ad 1.5 seconds after loading the app
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        AdManager.showMyFullscreenAd();
-      }, 1500); 
+    await AdMob.showBanner({
+      adId: 'ca-app-pub-3940256099942544/6300978111', 
+      adSize: 'ADAPTIVE_BANNER',
+      position: 'BOTTOM_CENTER',
+      margin: 20, 
+      isTesting: true 
     });
-  })();
-</script>
+  },
+
+  async preloadInterstitial(){
+    const AdMob = this._admob();
+    if(!AdMob) return;
+    try {
+      await AdMob.prepareInterstitial({
+        adId: 'ca-app-pub-3940256099942544/1033173712', 
+        isTesting: true
+      });
+    } catch(e) { console.log('[AdManager] Interstitial preload failed:', e); }
+  },
+
+  async showInterstitial(onClosed){
+    const AdMob = this._admob();
+    if(!AdMob) { if(onClosed) onClosed(); return; }
+    try {
+      const sub = await AdMob.addListener('interstitialAdDismissed', () => {
+        sub.remove();
+        if(onClosed) onClosed();
+      });
+      await AdMob.showInterstitial();
+    } catch(e) {
+      console.log('[AdManager] Interstitial show failed:', e);
+      if(onClosed) onClosed();
+    }
+  },
+
+  // FIXED: Cleaned up to match the high-performance background preloading style
+  async preloadRewardedAd(){
+    const AdMob = this._admob();
+    if(!AdMob) return;
+    try {
+      await AdMob.prepareRewardedAd({
+        adId: 'ca-app-pub-3940256099942544/5224354917', // Google official rewarded test ID
+        isTesting: true
+      });
+      console.log('[AdManager] Rewarded ad preloaded in background.');
+    } catch(e) { console.log('[AdManager] Rewarded preload failed:', e); }
+  },
+
+  // FIXED: Removed the instant-run race condition
+  async showRewardedAd(onReward, onFail){
+    const AdMob = this._admob();
+    if(!AdMob) { if(onReward) onReward(); return; } 
+    try {
+      let rewardedGranted = false;
+
+      // 1. Setup the listener to capture when the user watches completely
+      const rewardSub = await AdMob.addListener('rewardedVideoAdReward', (reward) => {
+        console.log('[AdManager] Reward earned:', reward);
+        rewardedGranted = true; 
+      });
+
+      // 2. Setup the listener to capture when the ad closes
+      const closeSub = await AdMob.addListener('rewardedVideoAdDismissed', () => {
+        rewardSub.remove();
+        closeSub.remove();
+        
+        if (rewardedGranted) {
+          if(onReward) onReward();
+        } else {
+          if(onFail) onFail();
+        }
+      });
+
+      // 3. Launch the presentation player safely
+      await AdMob.showRewardedAd();
+    } catch(e) {
+      console.log('[AdManager] Rewarded ad show execution failed:', e);
+      if(onFail) onFail();
+    }
+  }
+};
+
+// ==========================================
+// RUNNER TRIGGER BLOCK WITH REWARD PRELOADING
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(async () => {
+    await AdManager.initBannerAd();
+    await AdManager.preloadInterstitial();
+    await AdManager.preloadRewardedAd(); // NEW: Cache the video file on startup!
+  }, 3000);
+
+  const intBtn = document.getElementById('testInterstitialBtn');
+  if (intBtn) {
+    intBtn.addEventListener('click', () => {
+      AdManager.showInterstitial(async () => {
+        await AdManager.preloadInterstitial();
+      });
+    });
+  }
+
+  const rewBtn = document.getElementById('testRewardedBtn');
+  if (rewBtn) {
+    rewBtn.addEventListener('click', () => {
+      AdManager.showRewardedAd(
+        async () => {
+          alert('Success! You watched the video completely. Here is your reward!');
+          await AdManager.preloadRewardedAd(); // Preload next one immediately
+        },
+        async () => {
+          alert('Failed to show rewarded ad or you skipped out early.');
+          await AdManager.preloadRewardedAd(); // Reload a clean instance
+        }
+      );
+    });
+  }
+});
+
 
 
 
